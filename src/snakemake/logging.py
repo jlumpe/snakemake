@@ -104,12 +104,6 @@ def format_percentage(done: int, total: int) -> str:
     return fmt(fraction)
 
 
-def get_event_level(record: logging.LogRecord) -> tuple[Optional[LogEvent], str]:
-    """Get snakemake log level and standard level name from a log record."""
-    event = record.__dict__.get("event", None)
-    return (event, record.levelname)
-
-
 def is_quiet_about(quiet: Collection["Quietness"], msg_type: str) -> bool:
     from snakemake.settings.enums import Quietness
 
@@ -135,7 +129,7 @@ class DefaultFormatter(logging.Formatter):
         """
         Override format method to format Snakemake-specific log messages.
         """
-        event, level = get_event_level(record)
+        event = getattr(record, 'event', None)
         record_dict = record.__dict__.copy()
 
         def default_formatter(rd):
@@ -380,7 +374,7 @@ class DefaultFilter:
     def filter(self, record: logging.LogRecord) -> bool:
         from snakemake.settings.enums import Quietness
 
-        event, level = get_event_level(record)
+        event = getattr(record, 'event', None)
 
         if Quietness.ALL in self.quiet and not self.dryrun:
             return False
@@ -495,7 +489,7 @@ class ColorizingTextHandler(logging.StreamHandler):
 
         with self._output_lock:
             try:
-                event, level = get_event_level(record)
+                event = getattr(record, 'event', None)
 
                 if event == LogEvent.JOB_INFO:
                     if not self.last_msg_was_job_info:
@@ -526,10 +520,10 @@ class ColorizingTextHandler(logging.StreamHandler):
         """
         message = [message]
 
-        event, level = get_event_level(record)
+        event = getattr(record, 'event', None)
 
         if not self.nocolor and record.levelname in self.colors:
-            if level == "INFO" and event in self.yellow_info_events:
+            if record.levelname == "INFO" and event in self.yellow_info_events:
                 color = self.colors["WARNING"]
             else:
                 color = self.colors[record.levelname]
