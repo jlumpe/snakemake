@@ -18,6 +18,7 @@ import pytest
 import glob
 import subprocess
 import tarfile
+from typing import Sequence
 
 from snakemake_interface_executor_plugins.settings import SharedFSUsage
 from snakemake_interface_executor_plugins.registry import ExecutorPluginRegistry
@@ -151,23 +152,22 @@ def print_tree(path: str, exclude: StrPath | None = None):
 
 
 def run(
-    path,
-    shouldfail=False,
-    snakefile="Snakefile",
-    subpath=None,
-    no_tmpdir=False,
-    check_md5=True,
-    check_results=None,
-    cores=3,
-    nodes=None,
-    set_pythonpath=True,
-    cleanup=True,
+    path: StrPath,
+    shouldfail: bool = False,
+    snakefile: StrPath = "Snakefile",
+    no_tmpdir: bool = False,
+    check_md5: bool = True,
+    check_results: bool | None = None,
+    cores: int = 3,
+    nodes: int | None = None,
+    set_pythonpath: bool = True,
+    cleanup: bool | None = None,
     conda_frontend="conda",
     config=dict(),
     targets=set(),
     container_image=os.environ.get("CONTAINER_IMAGE", "snakemake/snakemake:latest"),
-    shellcmd=None,
-    sigint_after=None,
+    shellcmd: str | Sequence[str] | None = None,
+    sigint_after: float | None = None,
     overwrite_resource_scopes=None,
     executor="local",
     executor_settings=None,
@@ -219,20 +219,54 @@ def run(
     shared_fs_usage=None,
     benchmark_extended=False,
     apptainer_args="",
-    tmpdir=None,
-):
+    tmpdir: StrPath | None = None,
+) -> Path | None:
     """
     Test the Snakefile in the path.
     There must be a Snakefile in the path and a subdirectory named
     expected-results. If cleanup is False, we return the temporary
     directory to the calling test for inspection, and the test should
     clean it up.
+
+    Parameters
+    ----------
+    path
+        TODO
+    shouldfail
+        Whether the run is expected to fail.
+    snakefile
+        Path to Snakefile, relative to ``path``.
+    shellcmd
+        Shell command to run (as string or list of strings). Must start with "snakemake". If given,
+        Snakemake will be run in a subprocess.
+    sigint_after
+        If not None, send a SIGINT signal after this many seconds.
+    tmpdir
+        Temporary directory to run in. If None one will be created automatically.
+    no_tmpdir
+        If true run directly in ``path`` instead of a temporary directory.
+    cleanup
+        Whether to delete the temporary directory after running. Defaults to true if temporary
+        directory was created automatically, false if one was given with ``tmpdir``.
+    set_pythonpath
+        If true set the ``PYTHONPATH`` environment variable to current working directory. Otherwise
+        ensure it is not set.
+
+    Returns
+    -------
+    Path | None
+        Path to temporary directory if ``cleanup`` is None, otherwise None.
     """
+    path = Path(path)
+
     if check_results is None:
         if not shouldfail:
             check_results = True
         else:
             check_results = False
+
+    if cleanup is None:
+        cleanup = tmpdir is None
 
     if set_pythonpath:
         # Enforce current workdir (the snakemake source dir) to also be in PYTHONPATH
@@ -250,17 +284,16 @@ def run(
             results_dir.exists() and results_dir.is_dir()
         ), f"{results_dir} does not exist"
 
+    # Get temporary directory
     if tmpdir is None:
-        # If we need to further check results, we won't cleanup tmpdir
-        tmpdir = next(tempfile._get_candidate_names())
-        tmpdir = os.path.join(
-            tempfile.gettempdir(), f"snakemake-{original_dirname}-{tmpdir}"
-        )
-        os.mkdir(tmpdir)
+        tmpdir = tempfile.mkdtemp(prefix=f"snakemake-{original_dirname}-")
 
         # copy files
         for f in os.listdir(path):
             copy(os.path.join(path, f), tmpdir)
+
+    else:
+        tmpdir = os.fsdecode(os.fspath(tmpdir))
 
     # Snakefile is now in temporary directory
     snakefile = join(tmpdir, snakefile)
@@ -271,17 +304,26 @@ def run(
     config = dict(config)
 
     # run snakemake
-    if shellcmd:
-        if not shellcmd.startswith("snakemake"):
-            raise ValueError("shellcmd does not start with snakemake")
-        shellcmd = "{} -m {}".format(sys.executable, shellcmd)
+    if shellcmd is not None:
+        if isinstance(shellcmd, str):
+            shell = True
+            if not shellcmd.startswith("snakemake"):
+                raise ValueError("shellcmd does not start with snakemake")
+            shellcmd = f"{shlex.quote(sys.executable)} -m {shellcmd}"
+
+        else:
+            shell = False
+            if shellcmd[0] != "snakemake":
+                raise ValueError("shellcmd does not start with snakemake")
+            shellcmd = [sys.executable, "-m", *shellcmd]
+
         try:
             if sigint_after is None:
                 res = subprocess.run(
                     shellcmd,
                     cwd=path if no_tmpdir else tmpdir,
                     check=True,
-                    shell=True,
+                    shell=shell,
                     stderr=subprocess.STDOUT,
                     stdout=subprocess.PIPE,
                 )
@@ -289,8 +331,9 @@ def run(
                 success = True
             else:
                 with subprocess.Popen(
-                    shlex.split(shellcmd),
+                    shellcmd,
                     cwd=path if no_tmpdir else tmpdir,
+                    shell=shell,
                     stderr=subprocess.STDOUT,
                     stdout=subprocess.PIPE,
                 ) as process:
@@ -303,6 +346,7 @@ def run(
         except subprocess.CalledProcessError as e:
             success = False
             print(e.stdout.decode(), file=sys.stderr)
+
     else:
         assert sigint_after is None, "Cannot sent SIGINT when calling directly"
 
@@ -501,4 +545,6 @@ def run(
 
     if not cleanup:
         return Path(tmpdir)
+
     shutil.rmtree(tmpdir, ignore_errors=ON_WINDOWS)
+    return None
