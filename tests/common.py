@@ -220,7 +220,7 @@ def run(
     benchmark_extended=False,
     apptainer_args="",
     tmpdir: StrPath | None = None,
-) -> Path | None:
+) -> Path:
     """
     Test the Snakefile in the path.
     There must be a Snakefile in the path and a subdirectory named
@@ -254,8 +254,10 @@ def run(
 
     Returns
     -------
-    Path | None
-        Path to temporary directory if ``cleanup`` is None, otherwise None.
+    Path
+        Working directory the workflow was run in. Note that if it was a temporary directory that
+        was created by the function and ``cleanup`` is true, it will have been deleted by the time
+        the function returns.
     """
     path = Path(path)
 
@@ -284,19 +286,27 @@ def run(
             results_dir.exists() and results_dir.is_dir()
         ), f"{results_dir} does not exist"
 
-    # Get temporary directory
-    if tmpdir is None:
-        tmpdir = tempfile.mkdtemp(prefix=f"snakemake-{original_dirname}-")
-
-        # copy files
-        for f in os.listdir(path):
-            copy(os.path.join(path, f), tmpdir)
+    # Directory to run in
+    if no_tmpdir:
+        workdir = path
+        tmpdir = None
 
     else:
-        tmpdir = os.fsdecode(os.fspath(tmpdir))
+        # Get temporary directory
+        if tmpdir is None:
+            tmpdir = Path(tempfile.mkdtemp(prefix=f"snakemake-{original_dirname}-"))
+
+            # copy files
+            for f in os.listdir(path):
+                copy(path / f, tmpdir)
+
+        else:
+            tmpdir = Path(tmpdir)
+
+        workdir = tmpdir
 
     # Snakefile is now in temporary directory
-    snakefile = join(tmpdir, snakefile)
+    snakefile = workdir / snakefile
 
     snakemake_api = None
     exception = None
@@ -321,7 +331,7 @@ def run(
             if sigint_after is None:
                 res = subprocess.run(
                     shellcmd,
-                    cwd=path if no_tmpdir else tmpdir,
+                    cwd=workdir,
                     check=True,
                     shell=shell,
                     stderr=subprocess.STDOUT,
@@ -332,7 +342,7 @@ def run(
             else:
                 with subprocess.Popen(
                     shellcmd,
-                    cwd=path if no_tmpdir else tmpdir,
+                    cwd=workdir,
                     shell=shell,
                     stderr=subprocess.STDOUT,
                     stdout=subprocess.PIPE,
@@ -409,8 +419,8 @@ def run(
                         deployment_method=deployment_method,
                         apptainer_args=apptainer_args,
                     ),
-                    snakefile=Path(original_snakefile if no_tmpdir else snakefile),
-                    workdir=Path(path if no_tmpdir else tmpdir),
+                    snakefile=snakefile,
+                    workdir=workdir,
                 )
 
                 dag_api = workflow_api.dag(
@@ -500,7 +510,7 @@ def run(
             if snakemake_api is not None and exception is not None:
                 snakemake_api.print_exception(exception)
             print("Workdir:")
-            print_tree(tmpdir, exclude=".snakemake/conda")
+            print_tree(str(workdir), exclude=".snakemake/conda")
             if exception is not None:
                 raise exception
         assert success, "expected successful execution"
@@ -512,14 +522,14 @@ def run(
             ):
                 # this means tests cannot use directories as output files
                 continue
-            targetfile = join(tmpdir, resultfile)
-            expectedfile = join(results_dir, resultfile)
+            targetfile = workdir / resultfile
+            expectedfile = results_dir / resultfile
 
             if ON_WINDOWS:
                 if os.path.exists(join(results_dir, resultfile + "_WIN")):
                     continue  # Skip test if a Windows specific file exists
                 if resultfile.endswith("_WIN"):
-                    targetfile = join(tmpdir, resultfile[:-4])
+                    targetfile = workdir / resultfile[:-4]
             elif resultfile.endswith("_WIN"):
                 # Skip win specific result files on Posix platforms
                 continue
@@ -543,8 +553,8 @@ def run(
                         expected_content=expected_content,
                     )
 
-    if not cleanup:
-        return Path(tmpdir)
+    # Clean up
+    if cleanup and tmpdir is not None:
+        shutil.rmtree(tmpdir, ignore_errors=ON_WINDOWS)
 
-    shutil.rmtree(tmpdir, ignore_errors=ON_WINDOWS)
-    return None
+    return workdir
