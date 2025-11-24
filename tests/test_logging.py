@@ -4,12 +4,15 @@ import sys
 import subprocess as sp
 import logging
 from collections import Counter
+from contextlib import contextmanager
+from typing import Iterator
 from pathlib import Path
 import json
 
 import pytest
 
 from snakemake_interface_logger_plugins.common import LogEvent
+from snakemake_interface_logger_plugins.registry import LoggerPluginRegistry
 
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -22,6 +25,22 @@ from .conftest import (
     needs_strace,
     ON_MACOS,
 )
+
+
+@contextmanager
+def replace_registry() -> Iterator[LoggerPluginRegistry]:
+    """
+    Context manager which temporary replaces the global LoggerPluginRegistry singleton with a new
+    instance.
+    """
+
+    orig_registry = LoggerPluginRegistry._instance
+    try:
+        LoggerPluginRegistry._instance = None
+        yield LoggerPluginRegistry()
+
+    finally:
+        LoggerPluginRegistry._instance = orig_registry
 
 
 def count_events(caplog: pytest.LogCaptureFixture) -> dict[LogEvent, int]:
