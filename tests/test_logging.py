@@ -189,6 +189,7 @@ def test_log_events(
     with caplog.at_level(logging.INFO):
         run(dpath("logging/test_logfile"), check_results=False)
 
+    # Check log event counts
     event_counts = count_events(caplog)
 
     check_event_counts(
@@ -205,6 +206,7 @@ def test_log_events(
         },
     )
 
+    # Check stderr
     captured = capfd.readouterr()
     stderr_output = captured.err
     expected_in_stderr = [
@@ -228,6 +230,7 @@ def test_rule_failure(
     with caplog.at_level(logging.INFO):
         run(dpath("logging/test_rule_failure"), check_results=False, shouldfail=True)
 
+    # Check event counts
     event_counts = count_events(caplog)
 
     check_event_counts(
@@ -243,6 +246,22 @@ def test_rule_failure(
             LogEvent.JOB_ERROR: 6,
         },
     )
+
+    # Check stderr
+    captured = capfd.readouterr()
+    stderr_output = captured.err
+    expected_in_stderr = [
+        "Building DAG of jobs",
+        "Job stats:",
+        "RuleException:",
+        "At least one job did not complete successfully.",
+        "Exiting because a job execution failed. Look below for error messages",
+    ]
+
+    for expected_msg in expected_in_stderr:
+        assert (
+            expected_msg in stderr_output
+        ), f"Expected '{expected_msg}' not found in stderr output"
 
 
 @pytest.mark.parametrize(
