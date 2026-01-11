@@ -536,8 +536,6 @@ class LoggerManager:
     ----------
     logger
         Logger object all handlers are attached to.
-    initialized
-        Whether :meth:`setup` has been called.
     queue_listener
         Queue listener used to process all plugin handlers in the main thread. An associated
         :class:`logging.handlers.QueueHandler` is attached to :attr:`logger`.
@@ -552,7 +550,6 @@ class LoggerManager:
     """
 
     logger: logging.Logger
-    initialized: bool
     queue_listener: Optional[logging.handlers.QueueListener]
     needs_rulegraph: bool
     logfile_handlers: dict[logging.Handler, str]
@@ -581,8 +578,6 @@ class LoggerManager:
             self.logger.setLevel(settings.log_level_override)
         else:
             self.logger.setLevel(logging.DEBUG if settings.verbose else logging.INFO)
-
-        self.initialized = True
 
     def _setup_plugins(self) -> bool:
         """Initialize and configure plugin handlers.
