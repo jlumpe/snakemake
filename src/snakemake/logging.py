@@ -609,7 +609,7 @@ class LoggerManager:
                 has_stream_handler = True
 
             # Track file handlers for later reference
-            if handler.writes_to_file:
+            if hasattr(handler, "baseFilename") and handler.baseFilename is not None:
                 self.logfile_handlers[handler] = handler.baseFilename
 
             handlers.append(handler)
