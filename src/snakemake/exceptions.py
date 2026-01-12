@@ -181,6 +181,7 @@ def print_exception(ex, linemaps=None):
     log_verbose_traceback(ex)
     logger.error(
         format_exception_to_string(ex, linemaps),
+        exc_info=ex,
         extra=dict(event=LogEvent.ERROR, exception=ex.__class__.__name__),
     )
 
