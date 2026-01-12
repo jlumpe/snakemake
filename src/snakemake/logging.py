@@ -688,6 +688,7 @@ class LoggerManager:
         return logfiles
 
     def setup_logfile(self, workdir: Optional[os.PathLike] = None) -> None:
+        """Set up and add default file handler."""
         if self.settings.enable_file_logging and not self.settings.dryrun:
             if workdir:
                 logdir = os.path.join(workdir, ".snakemake", "log")

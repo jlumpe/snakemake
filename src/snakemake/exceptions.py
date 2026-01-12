@@ -5,15 +5,28 @@ __license__ = "MIT"
 
 import os
 import traceback
+from typing import Any, TypeAlias, Mapping, Iterator, Iterable, Container, TYPE_CHECKING
 from tokenize import TokenError
 from snakemake_interface_common.exceptions import WorkflowError, ApiError
 from snakemake_interface_logger_plugins.common import LogEvent
 from snakemake_interface_storage_plugins.exceptions import FileOrDirectoryNotFoundError
 
+# Typing-only imports
+if TYPE_CHECKING:
+    from snakemake.rules import Rule
+
+
+LineMaps: TypeAlias = Mapping[str, Mapping[int, int]]
+
 
 def format_error(
-    ex, lineno, linemaps=None, snakefile=None, show_traceback=False, rule=None
-):
+    ex: BaseException,
+    lineno: int | None,
+    linemaps: LineMaps | None = None,
+    snakefile: str | None = None,
+    show_traceback: bool = False,
+    rule: str | None = None,
+) -> str:
     if linemaps is None:
         linemaps = dict()
     msg = str(ex)
@@ -41,13 +54,15 @@ def format_error(
     )
 
 
-def get_exception_origin(ex, linemaps):
+def get_exception_origin(
+    ex: BaseException, linemaps: LineMaps
+) -> tuple[int, str] | None:
     for file, lineno, _, _ in reversed(traceback.extract_tb(ex.__traceback__)):
         if file in linemaps:
             return lineno, file
 
 
-def cut_traceback(ex):
+def cut_traceback(ex: BaseException) -> list[traceback.FrameSummary]:
     lines = []
     snakemake_path = os.path.dirname(__file__)
     not_seen_snakemake = True
@@ -65,7 +80,7 @@ def cut_traceback(ex):
     return lines[::-1]
 
 
-def format_traceback(tb, linemaps):
+def format_traceback(tb, linemaps: LineMaps) -> Iterator[str]:
     for file, lineno, function, code in tb:
         if file in linemaps:
             lineno = linemaps[file][lineno]
@@ -73,14 +88,16 @@ def format_traceback(tb, linemaps):
             yield f'  File "{file}", line {lineno}, in {function}'
 
 
-def log_verbose_traceback(ex):
+def log_verbose_traceback(ex: BaseException) -> None:
     from snakemake.logging import logger
 
     tb = "Full " + "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
     logger.debug(tb)
 
 
-def format_exception_to_string(ex, linemaps=None):
+def format_exception_to_string(
+    ex: BaseException, linemaps: LineMaps | None = None
+) -> str:
     """
     Returns the error message for a given exception as a string.
 
@@ -152,7 +169,11 @@ def format_exception_to_string(ex, linemaps=None):
         return "\n".join(traceback.format_exception(ex))
 
 
-def print_exception_warning(ex, linemaps=None, footer_message=""):
+def print_exception_warning(
+    ex: BaseException,
+    linemaps: LineMaps | None = None,
+    footer_message: str = "",
+) -> None:
     """
     Print an error message for a given exception using logger warning.
 
@@ -167,7 +188,7 @@ def print_exception_warning(ex, linemaps=None, footer_message=""):
     logger.warning(f"{format_exception_to_string(ex, linemaps)}\n{footer_message}")
 
 
-def print_exception(ex, linemaps=None):
+def print_exception(ex: BaseException, linemaps: LineMaps | None = None) -> None:
     """
     Print an error message for a given exception.
 
@@ -186,7 +207,7 @@ def print_exception(ex, linemaps=None):
     )
 
 
-def update_lineno(ex: SyntaxError, linemaps):
+def update_lineno(ex: SyntaxError, linemaps: LineMaps) -> SyntaxError | None:
     if ex.filename and ex.lineno:
         linemap = linemaps[ex.filename]
         try:
@@ -199,7 +220,7 @@ def update_lineno(ex: SyntaxError, linemaps):
 
 
 class SourceFileError(WorkflowError):
-    def __init__(self, msg):
+    def __init__(self, msg: str):
         super().__init__(f"Error in source file definition: {msg}")
 
 
@@ -214,7 +235,12 @@ class RuleException(Exception):
     """
 
     def __init__(
-        self, message=None, include=None, lineno=None, snakefile=None, rule=None
+        self,
+        message: str | None = None,
+        include: Iterable["RuleException"] | None = None,
+        lineno: int | None = None,
+        snakefile: str | None = None,
+        rule: "Rule | None" = None,
     ):
         """
         Creates a new instance of RuleException.
@@ -244,12 +270,20 @@ class RuleException(Exception):
         self.omit = not message
 
     @property
-    def messages(self):
+    def messages(self) -> Iterator[str]:
         return map(str, (ex for ex in self._include + [self] if not ex.omit))
 
 
 class InputFunctionException(WorkflowError):
-    def __init__(self, msg, wildcards=None, lineno=None, snakefile=None, rule=None):
+
+    def __init__(
+        self,
+        msg: str | BaseException,
+        wildcards: Mapping[str, Any] | None = None,
+        lineno: int | None = None,
+        snakefile: str | None = None,
+        rule: "Rule | None" = None,
+    ):
         fmt_msg = (
             "Error:\n  "
             + self.format_arg(msg)
@@ -632,7 +666,9 @@ class MissingOutputFileCachePathException(Exception):
     pass
 
 
-def is_file_not_found_error(exc, considered_files):
+def is_file_not_found_error(
+    exc: BaseException, considered_files: Container[str]
+) -> bool:
     # TODO find a better way to detect whether the input files are not present
     if isinstance(exc, FileNotFoundError) and exc.filename in considered_files:
         return True

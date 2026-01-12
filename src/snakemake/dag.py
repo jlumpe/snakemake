@@ -3172,7 +3172,7 @@ class DAG(DAGExecutorInterface, DAGReportInterface, DAGSchedulerInterface):
                 )
             )
 
-    def print_reasons(self):
+    def print_reasons(self) -> None:
         """Print summary of execution reasons."""
         reasons = defaultdict(set)
         for job in self.needrun_jobs(exclude_finished=False):
@@ -3189,6 +3189,15 @@ class DAG(DAGExecutorInterface, DAGReportInterface, DAGSchedulerInterface):
             logger.info(msg)
 
     def stats(self) -> tuple[str, dict[str, int]]:
+        """Get statistics on total number of jobs per rule.
+
+        Returns
+        -------
+        message : str
+            Formatted human-readable message.
+        stats_dict : dict[str, int]
+            Dictionary mapping rule names to job counts.
+        """
         from tabulate import tabulate
 
         # Count the jobs

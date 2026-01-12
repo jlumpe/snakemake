@@ -89,12 +89,12 @@ class AbstractJob(JobExecutorInterface, JobSchedulerInterface):
     def reset_params_and_resources(self): ...
 
     @abstractmethod
-    def get_target_spec(self): ...
+    def get_target_spec(self) -> str: ...
 
     @abstractmethod
-    def products(self, include_logfiles=True): ...
+    def products(self, include_logfiles: bool = True): ...
 
-    def has_products(self, include_logfiles=True):
+    def has_products(self, include_logfiles: bool = True):
         for _ in self.products(include_logfiles=include_logfiles):
             return True
         return False
@@ -1493,7 +1493,9 @@ class GroupJob(AbstractJob, GroupJobExecutorInterface, GroupJobSchedulerInterfac
         for job in sorted(self.jobs, key=lambda j: j.rule.name):
             job.log_info(indent=True)
 
-    def log_error(self, msg=None, aux_logs: Optional[list] = None, **kwargs):
+    def log_error(
+        self, msg: Optional[str] = None, aux_logs: Optional[list] = None, **kwargs
+    ):
         job_error_info = [
             job.get_log_error_info(indent=True, **kwargs) for job in self.jobs
         ]
