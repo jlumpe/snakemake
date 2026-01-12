@@ -284,6 +284,8 @@ class InputFunctionException(WorkflowError):
         snakefile: str | None = None,
         rule: "Rule | None" = None,
     ):
+        if wildcards is None:
+            wildcards = {}
         fmt_msg = (
             "Error:\n  "
             + self.format_arg(msg)
@@ -291,8 +293,9 @@ class InputFunctionException(WorkflowError):
             + "\n".join(f"  {name}={value}" for name, value in wildcards.items())
         )
         if isinstance(msg, Exception):
+            linemaps = dict() if rule is None else rule.workflow.linemaps
             fmt_msg += "\nTraceback:\n" + "\n".join(
-                format_traceback(cut_traceback(msg), rule.workflow.linemaps)
+                format_traceback(cut_traceback(msg), linemaps)
             )
         super().__init__(fmt_msg, lineno=lineno, snakefile=snakefile, rule=rule)
 
