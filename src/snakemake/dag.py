@@ -32,7 +32,7 @@ from snakemake_interface_executor_plugins.dag import DAGExecutorInterface
 from snakemake_interface_report_plugins.interfaces import DAGReportInterface
 from snakemake_interface_storage_plugins.storage_object import StorageObjectTouch
 from snakemake_interface_scheduler_plugins.interfaces.dag import DAGSchedulerInterface
-from snakemake_interface_logger_plugins.common import LogEvent
+from snakemake_interface_logger_plugins.events import DebugDagEvent
 from snakemake.settings.enums import Quietness
 
 from snakemake import workflow as _workflow
@@ -1146,7 +1146,8 @@ class DAG(DAGExecutorInterface, DAGReportInterface, DAGSchedulerInterface):
 
         for i, job in enumerate(jobs):
             logger.debug(
-                None, extra=dict(event=LogEvent.DEBUG_DAG, status="candidate", job=job)
+                None,
+                extra=DebugDagEvent(status="candidate", job=job).extra(),
             )
             if file in job.input and not any(
                 is_flagged(f, "before_update") for f in job.input if f == file
@@ -1237,16 +1238,15 @@ class DAG(DAGExecutorInterface, DAGReportInterface, DAGSchedulerInterface):
             raise AmbiguousRuleException(file, producer, ambiguities[0])
         logger.debug(
             f"Selected {producer.rule.name}",
-            extra=dict(event=LogEvent.DEBUG_DAG, status="selected", job=producer),
+            extra=DebugDagEvent(status="selected", job=producer).extra(),
         )
         if exceptions:
             logger.debug(
                 msg=f"Producer found, hence exceptions are ignored. Exceptions: {WorkflowError(*exceptions)}",
-                extra=dict(
-                    event=LogEvent.DEBUG_DAG,
+                extra=DebugDagEvent(
                     file=file,
                     exception=WorkflowError(*exceptions),
-                ),
+                ).extra(),
             )
         return producer
 
@@ -1325,11 +1325,10 @@ class DAG(DAGExecutorInterface, DAGReportInterface, DAGSchedulerInterface):
                     else:
                         logger.debug(
                             msg=f"No producers found, but file: {res.file} is present on disk.",
-                            extra=dict(
-                                event=LogEvent.DEBUG_DAG,
+                            extra=DebugDagEvent(
                                 file=res.file,
                                 exception=ex,
-                            ),
+                            ).extra(),
                         )
                         known_producers[res.file] = None
                     if isinstance(ex, CyclicGraphException) or isinstance(

@@ -8,7 +8,7 @@ import traceback
 from typing import Any, TypeAlias, Mapping, Iterator, Iterable, Container, TYPE_CHECKING
 from tokenize import TokenError
 from snakemake_interface_common.exceptions import WorkflowError, ApiError
-from snakemake_interface_logger_plugins.common import LogEvent
+from snakemake_interface_logger_plugins.events import ErrorEvent
 from snakemake_interface_storage_plugins.exceptions import FileOrDirectoryNotFoundError
 
 # Typing-only imports
@@ -203,7 +203,7 @@ def print_exception(ex: BaseException, linemaps: LineMaps | None = None) -> None
     logger.error(
         format_exception_to_string(ex, linemaps),
         exc_info=ex,
-        extra=dict(event=LogEvent.ERROR, exception=ex.__class__.__name__),
+        extra=ErrorEvent(exception=ex.__class__.__name__).extra(),
     )
 
 

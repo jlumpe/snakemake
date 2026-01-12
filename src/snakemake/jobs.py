@@ -37,6 +37,13 @@ from snakemake_interface_scheduler_plugins.interfaces.jobs import (
 )
 from snakemake_interface_executor_plugins.settings import ExecMode
 from snakemake_interface_logger_plugins.common import LogEvent
+from snakemake_interface_logger_plugins.events import (
+    JobInfoEvent,
+    JobErrorEvent,
+    GroupInfoEvent,
+    GroupErrorEvent,
+    ShellCmdEvent,
+)
 
 from snakemake.io import (
     _IOFile,
@@ -1064,47 +1071,50 @@ class Job(
     ) -> None:
         priority = self.priority
 
+        jobid = self.dag.jobid(self)
         benchmark = (
             fmt_iofile(self.benchmark, as_input=False, as_output=True)
             if self.benchmark is not None
             else None
         )
+        event = JobInfoEvent(
+            jobid=jobid,
+            rule_name=self.rule.name,
+            rule_msg=self.message,
+            input=format_files(self.input, as_input=True),
+            output=format_files(self.output, as_output=True),
+            log=format_files(self.log, as_output=True),
+            benchmark=benchmark,
+            wildcards=self.wildcards_dict,
+            threads=self.threads,
+            reason=str(self.dag.reason(self)),
+            shellcmd=self.shellcmd,
+            resources=self.resources,
+            priority=(
+                "highest"
+                if priority == JobExecutorInterface.HIGHEST_PRIORITY
+                else priority
+            ),
+            local=(
+                not self.dag.workflow.dryrun and self.dag.workflow.is_local(self.rule)
+            ),
+            is_checkpoint=self.rule.is_checkpoint,
+            is_handover=self.rule.is_handover,
+        )
         logger.info(
             f" Rule: {self.rule.name}, Jobid: {self.dag.jobid(self)}",
-            extra=dict(
-                event=LogEvent.JOB_INFO,
-                jobid=self.dag.jobid(self),
-                rule_msg=self.message,
-                rule_name=self.rule.name,
+            extra=event.extra(
                 # in dryrun, we don't want to display a decision whether local or not
                 # since we don't know how the user wants to execute
-                local=(
-                    not self.dag.workflow.dryrun
-                    and self.dag.workflow.is_local(self.rule)
-                ),
-                input=format_files(self.input, as_input=True),
-                output=format_files(self.output, as_output=True),
-                log=format_files(self.log, as_output=True),
-                benchmark=benchmark,
-                wildcards=self.wildcards_dict,
-                reason=str(self.dag.reason(self)),
-                resources=self.resources,
-                priority=(
-                    "highest"
-                    if priority == JobExecutorInterface.HIGHEST_PRIORITY
-                    else priority
-                ),
-                threads=self.threads,
                 indent=indent,
-                is_checkpoint=self.rule.is_checkpoint,
                 printshellcmd=printshellcmd,
-                is_handover=self.rule.is_handover,
-                shellcmd=self.shellcmd,
             ),
         )
         logger.info(
             f"Shell command: {self.shellcmd}",
-            extra=dict(event=LogEvent.SHELLCMD, shellcmd=self.shellcmd, indent=indent),
+            extra=ShellCmdEvent(jobid=jobid, shellcmd=self.shellcmd).extra(
+                indent=indent
+            ),
         )
         if self.rule.is_checkpoint:
             logger.info("DAG of jobs will be updated after completion.")
@@ -1129,10 +1139,13 @@ class Job(
             else None
         )
 
-        return dict(
+        event = JobErrorEvent(
+            jobid=self.dag.jobid(self),
+        )
+
+        return event.extra(
             rule_name=self.rule.name,
             rule_msg=msg,
-            jobid=self.dag.jobid(self),
             input=format_files(self.input, as_input=True),
             output=format_files(self.output, as_output=True),
             log=format_files(self.log, as_output=True) + aux_logs,
@@ -1141,7 +1154,6 @@ class Job(
             aux=kwargs,
             indent=indent,
             shellcmd=self.shellcmd,
-            event=LogEvent.JOB_ERROR,
         )
 
     def log_error(
@@ -1491,9 +1503,7 @@ class GroupJob(AbstractJob, GroupJobExecutorInterface, GroupJobSchedulerInterfac
     def log_info(self, skip_dynamic: bool = False):
         logger.info(
             f"Group job {self.groupid} (jobs in lexicogr. order):",
-            extra=dict(
-                event=LogEvent.GROUP_INFO, group_id=self.groupid, jobs=self.jobs
-            ),
+            extra=GroupInfoEvent(group_id=self.groupid, jobs=list(self.jobs)).extra(),
         )
         for job in sorted(self.jobs, key=lambda j: j.rule.name):
             job.log_info(indent=True)
@@ -1505,16 +1515,12 @@ class GroupJob(AbstractJob, GroupJobExecutorInterface, GroupJobSchedulerInterfac
             job.get_log_error_info(indent=True, **kwargs) for job in self.jobs
         ]
         aux_logs = aux_logs or []
-        logger.error(
-            f"Error in group {self.groupid}",
-            dict(
-                event=LogEvent.GROUP_ERROR,
-                groupid=self.groupid,
-                aux_logs=aux_logs,
-                job_error_info=job_error_info,
-                **kwargs,
-            ),
+        event = GroupErrorEvent(
+            groupid=self.groupid,
+            aux_logs=aux_logs,
+            job_error_info=job_error_info,
         )
+        logger.error(f"Error in group {self.groupid}", extra=event.extra(**kwargs))
         for job in sorted(self.jobs, key=lambda j: j.rule.name):
             job.log_error(indent=True)
 

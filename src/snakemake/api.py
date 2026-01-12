@@ -50,7 +50,7 @@ from snakemake_interface_storage_plugins.registry import StoragePluginRegistry
 from snakemake_interface_common.plugin_registry.plugin import TaggedSettings
 from snakemake_interface_report_plugins.settings import ReportSettingsBase
 from snakemake_interface_report_plugins.registry import ReportPluginRegistry
-from snakemake_interface_logger_plugins.common import LogEvent
+from snakemake_interface_logger_plugins.events import WorkflowStartedEvent
 from snakemake_interface_scheduler_plugins.settings import SchedulerSettingsBase
 from snakemake_interface_scheduler_plugins.registry import SchedulerPluginRegistry
 
@@ -621,11 +621,10 @@ class DAGApi(ApiBase):
         workflow.group_settings = group_settings
         logger.info(
             None,
-            extra=dict(
-                event=LogEvent.WORKFLOW_STARTED,
+            extra=WorkflowStartedEvent(
                 workflow_id=uuid.uuid4(),
-                snakefile=self.workflow_api.snakefile,
-            ),
+                snakefile=str(self.workflow_api.snakefile),
+            ).extra(),
         )
         workflow.execute(
             executor_plugin=executor_plugin,

@@ -55,7 +55,11 @@ from snakemake_interface_executor_plugins.settings import ExecMode
 from snakemake_interface_common.plugin_registry.plugin import TaggedSettings
 from snakemake_interface_report_plugins.settings import ReportSettingsBase
 from snakemake_interface_report_plugins.registry.plugin import Plugin as ReportPlugin
-from snakemake_interface_logger_plugins.common import LogEvent
+from snakemake_interface_logger_plugins.events import (
+    RunInfoEvent,
+    ResourcesInfoEvent,
+    RuleGraphEvent,
+)
 from snakemake_interface_scheduler_plugins.settings import (
     SchedulerSettingsBase,
 )
@@ -1214,7 +1218,7 @@ class Workflow(WorkflowExecutorInterface):
 
         if self.logger_manager.needs_rulegraph:
             rulegraph = simple_rulegraph()
-            logger.info(None, extra=dict(event=LogEvent.RULEGRAPH, rulegraph=rulegraph))
+            logger.info(None, extra=RuleGraphEvent(rulegraph=rulegraph).extra())
 
     def _build_dag(self):
         logger.info("Building DAG of jobs...")
@@ -1355,7 +1359,7 @@ class Workflow(WorkflowExecutorInterface):
                     if not self.local_exec:
                         logger.info(
                             f"Provided remote nodes: {self.nodes}",
-                            extra=dict(event=LogEvent.RESOURCES_INFO, nodes=self.nodes),
+                            extra=ResourcesInfoEvent(nodes=self.nodes).extra(),
                         )
                     else:
                         if self._cores is not None:
@@ -1366,23 +1370,20 @@ class Workflow(WorkflowExecutorInterface):
                             )
                             logger.info(
                                 f"Provided cores: {self._cores}{info}",
-                                extra=dict(
-                                    event=LogEvent.RESOURCES_INFO, cores=self._cores
-                                ),
+                                extra=ResourcesInfoEvent(cores=self._cores).extra(),
                             )
                             logger.info(
                                 "Rules claiming more threads will be scaled down.",
-                                extra=dict(event=LogEvent.RESOURCES_INFO),
+                                extra=ResourcesInfoEvent().extra(),
                             )
 
                     provided_resources = format_resources(self.global_resources)
                     if provided_resources:
                         logger.info(
                             f"Provided resources: {provided_resources}",
-                            extra=dict(
-                                event=LogEvent.RESOURCES_INFO,
-                                provided_resources=self.global_resources,
-                            ),
+                            extra=ResourcesInfoEvent(
+                                provided_resources=self.global_resources
+                            ).extra(),
                         )
 
                     if self.local_exec and any(rule.group for rule in self.rules):
@@ -1406,7 +1407,7 @@ class Workflow(WorkflowExecutorInterface):
                         stats_msg, stats_dict = self.dag.stats()
                         logger.info(
                             stats_msg,
-                            extra=dict(event=LogEvent.RUN_INFO, stats=stats_dict),
+                            extra=RunInfoEvent(stats=stats_dict).extra(),
                         )
                 else:
                     logger.info(NOTHING_TO_BE_DONE_MSG)
@@ -1417,7 +1418,7 @@ class Workflow(WorkflowExecutorInterface):
                     stats_msg, stats_dict = self.dag.stats()
                     logger.info(
                         stats_msg,
-                        extra=dict(event=LogEvent.RUN_INFO, stats=stats_dict),
+                        extra=RunInfoEvent(stats=stats_dict).extra(),
                     )
                 else:
                     logger.info(NOTHING_TO_BE_DONE_MSG)
@@ -1461,7 +1462,7 @@ class Workflow(WorkflowExecutorInterface):
                         stats_msg, stats_dict = self.dag.stats()
                         logger.info(
                             stats_msg,
-                            extra=dict(event=LogEvent.RUN_INFO, stats=stats_dict),
+                            extra=RunInfoEvent(stats=stats_dict).extra(),
                         )
                         self.dag.print_reasons()
                         self.log_provenance_info()

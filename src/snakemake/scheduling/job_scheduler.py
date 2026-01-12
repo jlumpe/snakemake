@@ -19,7 +19,11 @@ from snakemake_interface_executor_plugins.scheduler import JobSchedulerExecutorI
 from snakemake_interface_executor_plugins.registry import ExecutorPluginRegistry
 from snakemake_interface_executor_plugins.registry import Plugin as ExecutorPlugin
 from snakemake_interface_executor_plugins.settings import ExecMode
-from snakemake_interface_logger_plugins.common import LogEvent
+from snakemake_interface_logger_plugins.events import (
+    JobStartedEvent,
+    JobFinishedEvent,
+    ProgressEvent,
+)
 from snakemake.io import _IOFile
 from snakemake.jobs import AbstractJob
 from snakemake_interface_scheduler_plugins.base import SchedulerBase
@@ -330,9 +334,9 @@ class JobScheduler(JobSchedulerExecutorInterface):
                     if not self.dryrun:
                         logger.info(
                             f"Execute {len(run)} jobs...",
-                            extra=dict(
-                                event=LogEvent.JOB_STARTED, jobs=[j.jobid for j in run]
-                            ),
+                            extra=JobStartedEvent(
+                                job_ids=[j.jobid for j in run]
+                            ).extra(),
                         )
 
                     # actually run jobs
@@ -470,12 +474,12 @@ class JobScheduler(JobSchedulerExecutorInterface):
                         for j in job:
                             logger.info(
                                 f"Finished jobid: {j.jobid} (Rule: {j.rule.name})",
-                                extra=dict(event=LogEvent.JOB_FINISHED, job_id=j.jobid),
+                                extra=JobFinishedEvent(job_id=j.jobid).extra(),
                             )
                     else:
                         logger.info(
                             f"Finished jobid: {job.jobid} (Rule: {job.rule.name})",
-                            extra=dict(event=LogEvent.JOB_FINISHED, job_id=job.jobid),
+                            extra=JobFinishedEvent(job_id=job.jobid).extra(),
                         )
                     self.progress()
 
@@ -658,11 +662,10 @@ class JobScheduler(JobSchedulerExecutorInterface):
         """Display the progress."""
         logger.info(
             None,
-            extra=dict(
-                event=LogEvent.PROGRESS,
+            extra=ProgressEvent(
                 done=self.finished_jobs,
                 total=len(self.workflow.dag),
-            ),
+            ).extra(),
         )
 
 
