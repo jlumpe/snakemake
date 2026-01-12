@@ -1056,7 +1056,12 @@ class Job(
     def is_group(self):
         return False
 
-    def log_info(self, indent=False, printshellcmd=True):
+    def log_info(
+        self,
+        skip_dynamic: bool = False,
+        indent: bool = False,
+        printshellcmd: bool = True,
+    ) -> None:
         priority = self.priority
 
         benchmark = (
@@ -1483,7 +1488,7 @@ class GroupJob(AbstractJob, GroupJobExecutorInterface, GroupJobSchedulerInterfac
     def is_updated(self):
         return any(job.is_updated for job in self.jobs)
 
-    def log_info(self):
+    def log_info(self, skip_dynamic: bool = False):
         logger.info(
             f"Group job {self.groupid} (jobs in lexicogr. order):",
             extra=dict(
